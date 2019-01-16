@@ -32,7 +32,8 @@ import scala.util.Random
 
 object ConwaysLife {
 
-  val gridSize = Coord( 6, 6 )
+  /** Configuration */
+  val gridSize = Coord( 10, 10 )
 
   /** Coordinates in the field */
   case class Coord( x: Int, y: Int )
@@ -90,13 +91,12 @@ object ConwaysLife {
 
   /** Start here */
   def main( args: Array[String] ): Unit = {
-    val grid = List.tabulate(gridSize.x, gridSize.y) { (x, y) =>
+    val grid = List.fill(gridSize.x, gridSize.y) {
       Random.nextInt(5) == 0
     }
     def accessGrid( c: Coord ) = {
-      val x = (grid.length + c.x % -grid.length) % grid.length
-      val y = (grid(x).length + c.y % -grid(x).length) % grid(x).length
-      grid(x)(y)
+      def wrap(n: Int) = (grid.length + n % -grid.length) % grid.length
+      grid( wrap(c.x) )( wrap(c.y) )
     }
     gameLoop( Store(accessGrid, Coord(0, 0)) )
   }
