@@ -44,7 +44,8 @@ object ConwaysLife {
   def neighbours( c: Coord ): List[Coord] =
     for {
       dx <- List(-1, 0, 1)
-      dy <- List(-1, 0, 1) if dx != dy
+      dy <- List(-1, 0, 1)
+      if dx != 0 || dy != 0
     } yield {
       Coord( c.x + dx, c.y + dy )
     }
@@ -55,15 +56,12 @@ object ConwaysLife {
       .experiment( neighbours )
       .count( identity )
 
-    val next = plane.extract match {
+    plane.extract match {
       case true if alive < 2 => false
       case true if alive > 3 => false
       case false if alive == 3 => true
       case x => x
     }
-
-    println(s"${plane.index}: ${plane.extract} + $alive -> $next")
-    next
   }
 
   /** Prints the field */
@@ -93,8 +91,7 @@ object ConwaysLife {
   /** Start here */
   def main( args: Array[String] ): Unit = {
     val grid = List.tabulate(gridSize.x, gridSize.y) { (x, y) =>
-      //Random.nextInt(5) == 0
-      x == 0 && y == 0
+      Random.nextInt(5) == 0
     }
     def accessGrid( c: Coord ) = {
       val x = (grid.length + c.x % -grid.length) % grid.length
