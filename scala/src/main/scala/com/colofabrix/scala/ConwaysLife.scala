@@ -83,19 +83,25 @@ object ConwaysLife {
   }
 
   /** The main game loop */
+  @tailrec
   def gameLoop( current: Grid ): Grid  = {
     println( "\033\143\n" + render(current) )
-    val next = current.coflatMap( conway )
     Thread.sleep( 1000 )
-    gameLoop( next )
+    gameLoop( current.coflatMap( conway ) )
   }
 
   /** Start here */
   def main( args: Array[String] ): Unit = {
-    val initial = { _: Coord =>
-      Random.nextInt(5) == 0
+    val grid = List.tabulate(gridSize.x, gridSize.y) { (x, y) =>
+      //Random.nextInt(5) == 0
+      x == 0 && y == 0
     }
-    gameLoop( Store(initial, Coord(0, 0)) )
+    def accessGrid( c: Coord ) = {
+      val x = (grid.length + c.x % -grid.length) % grid.length
+      val y = (grid(x).length + c.y % -grid(x).length) % grid(x).length
+      grid(x)(y)
+    }
+    gameLoop( Store(accessGrid, Coord(0, 0)) )
   }
 
 }
