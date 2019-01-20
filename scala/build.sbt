@@ -11,3 +11,7 @@ mainClass in (Compile, run) := Some("com.colofabrix.scala.ConwaysLife")
 // Cats
 scalacOptions += "-Ypartial-unification"
 libraryDependencies += "org.typelevel" %% "cats-core" % "1.5.0"
+
+// Kind Projector
+resolvers += Resolver.sonatypeRepo("releases")
+addCompilerPlugin("org.spire-math" %% "kind-projector" % "0.9.8")

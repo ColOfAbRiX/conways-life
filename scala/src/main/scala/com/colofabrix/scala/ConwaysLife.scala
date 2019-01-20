@@ -25,7 +25,6 @@ SOFTWARE.
 package com.colofabrix.scala
 
 import cats.implicits._
-import cats.data.Store
 
 import scala.annotation.tailrec
 import scala.util.Random
