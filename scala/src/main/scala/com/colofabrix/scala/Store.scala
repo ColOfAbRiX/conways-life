@@ -1,7 +1,6 @@
 package com.colofabrix.scala
 
 import cats._
-import cats.Eval
 import cats.implicits._
 
 case class Store[S, A]( peek: S => A, index: S ) {

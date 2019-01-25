@@ -25,6 +25,7 @@ SOFTWARE.
 package com.colofabrix.scala
 
 import cats.implicits._
+import cats.Eval
 
 import scala.annotation.tailrec
 import scala.util.Random
@@ -38,7 +39,25 @@ object ConwaysLife {
   case class Coord( x: Int, y: Int )
 
   /** Type of the field of the game */
-  type Grid = Store[Coord, Boolean]
+  type Grid = Store[Coord, Eval[Boolean]]
+
+  /** Prints the field */
+  def render( plane: Grid ): String = {
+    plane.experiment( _ => scan )
+      .map( cell => if( cell.value ) " x" else " ." )
+      .grouped( gridSize.x )
+      .map( _.mkString )
+      .mkString( "\n" )
+  }
+
+  /** Find the coordinates of all the grid */
+  val scan: List[Coord] =
+    for {
+      x <- (0 until gridSize.x).toList
+      y <- (0 until gridSize.y).toList
+    } yield {
+      Coord(x, y)
+    }
 
   /** Find the coordinates of the 8 neighbours on an infinite plane */
   def neighbours( c: Coord ): List[Coord] =
@@ -51,41 +70,28 @@ object ConwaysLife {
     }
 
   /** Function to determine the state of a cell */
-  def conway( plane: Grid ): Boolean = {
-    val alive = plane
-      .experiment( neighbours )
-      .count( identity )
+  def conway( plane: Grid ): Eval[Boolean] =
+    plane.extract.map { cell =>
+      val alive = plane
+        .experiment( neighbours )
+        .count( _.value )
 
-    plane.extract match {
-      case true if alive < 2 => false
-      case true if alive > 3 => false
-      case false if alive == 3 => true
-      case x => x
+      cell match {
+        case true if alive < 2 => false
+        case true if alive > 3 => false
+        case false if alive == 3 => true
+        case x => x
+      }
     }
-  }
-
-  /** Prints the field */
-  def render( plane: Grid ): String = {
-    val coords: List[Coord] = for {
-      x <- (0 until gridSize.x).toList
-      y <- (0 until gridSize.y).toList
-    } yield {
-      Coord(x, y)
-    }
-
-    plane.experiment( _ => coords )
-      .map( cell => if( cell ) " x" else " ." )
-      .grouped( gridSize.x )
-      .map( _.mkString )
-      .mkString( "\n" )
-  }
 
   /** The main game loop */
   @tailrec
   def gameLoop( current: Grid ): Grid  = {
     println( "\033\143\n" + render(current) )
     Thread.sleep( 1000 )
-    gameLoop( current.coflatMap( conway ) )
+    gameLoop(
+      current.coflatMap( conway )
+    )
   }
 
   /** Start here */
@@ -93,10 +99,14 @@ object ConwaysLife {
     val grid = List.fill(gridSize.x, gridSize.y) {
       Random.nextInt(5) == 0
     }
-    def accessGrid( c: Coord ) = {
-      def wrap(n: Int) = (grid.length + n % -grid.length) % grid.length
+
+    def wrap(n: Int): Int =
+      (grid.length + n % -grid.length) % grid.length
+
+    def accessGrid( c: Coord ) = Eval.later {
       grid( wrap(c.x) )( wrap(c.y) )
     }
+
     gameLoop( Store(accessGrid, Coord(0, 0)) )
   }
 
