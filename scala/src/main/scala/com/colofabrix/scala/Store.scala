@@ -1,26 +1,37 @@
 package com.colofabrix.scala
 
 import cats._
-import cats.Eval
 import cats.implicits._
 
-case class Store[S, A]( peek: S => A, index: S ) {
-  def seek( s: S ) =
-    duplicate.peek( s )
+case class Store[S, A]( lookup: S => A, index: S ) {
+  def peek( s: S ): A =
+    lookup(index)
 
   def extract: A =
-    peek( index )
+    lookup( index )
 
   def duplicate: Store[S, Store[S, A]] =
     coflatMap(x => x)
 
-  def map[B]( f: A => B ): Store[S, B] =
-    coflatMap( _ => f(extract) )
+  def map[B]( f: A => B ): Store[S, B] = {
+    Store( Store.memoize( lookup.andThen(f) ), index )
+  }
 
-  def coflatMap[B]( f: Store[S, A] => B ): Store[S, B] =
-    Store( s => f(Store(peek, s)), index )
+  def coflatMap[B]( f: Store[S, A] => B ): Store[S, B] = {
+    Store( s => f( Store( lookup, s ) ), index )
+  }
 
   def experiment[F[_]: Functor]( f: S => F[S] ): F[A] = {
-    f( index ).map( peek )
+    f( index ).map( lookup )
   }
+}
+
+object Store {
+
+  import scala.collection.mutable
+
+  def memoize[S, A]( f: S => A ): S => A = new mutable.HashMap[S, A]() {
+    override def apply( index: S ): A = getOrElseUpdate( index, f(index) )
+  }
+
 }

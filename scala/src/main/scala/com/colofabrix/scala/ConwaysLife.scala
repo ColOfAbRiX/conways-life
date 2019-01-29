@@ -83,8 +83,11 @@ object ConwaysLife {
   /** The main game loop */
   @tailrec
   def gameLoop( current: Grid ): Grid  = {
-    println( "\033\143\n" + render(current) )
+    //println( "\033\143\n" )
+    println( render(current) )
+
     Thread.sleep( 1000 )
+
     gameLoop( current.coflatMap( conway ) )
   }
 
