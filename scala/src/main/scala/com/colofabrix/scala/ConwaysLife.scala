@@ -25,7 +25,6 @@ SOFTWARE.
 package com.colofabrix.scala
 
 import cats.implicits._
-
 import scala.annotation.tailrec
 import scala.util.Random
 
@@ -41,13 +40,12 @@ object ConwaysLife {
   type Grid = Store[Coord, Boolean]
 
   /** Prints the field */
-  def render( plane: Grid ): String = {
+  def render( plane: Grid ): String =
     plane.experiment( _ => scan )
       .map( cell => if( cell ) " x" else " ." )
       .grouped( gridSize.x )
       .map( _.mkString )
       .mkString( "\n" )
-  }
 
   /** Find the coordinates of all the grid */
   val scan: List[Coord] =
@@ -62,8 +60,7 @@ object ConwaysLife {
   def neighbours( c: Coord ): List[Coord] =
     for {
       dx <- List(-1, 0, 1)
-      dy <- List(-1, 0, 1)
-      if dx != 0 || dy != 0
+      dy <- List(-1, 0, 1) if dx != 0 || dy != 0
     } yield {
       Coord( c.x + dx, c.y + dy )
     }
@@ -75,8 +72,7 @@ object ConwaysLife {
       .count( identity )
 
     plane.extract match {
-      case true if alive < 2 => false
-      case true if alive > 3 => false
+      case true if alive < 2 || alive > 3 => false
       case false if alive == 3 => true
       case x => x
     }
@@ -94,19 +90,25 @@ object ConwaysLife {
     )
   }
 
-  /** Start here */
-  def main( args: Array[String] ): Unit = {
+  /** Access an element in a grid wrapping around the edges */
+  def accessGrid( grid: List[List[Boolean]], c: Coord ): Boolean = {
+    def wrap(max: Int, n: Int) = (max + n % -max) % max
+    val x = wrap( grid.length, c.x )
+    val y = wrap( grid(x).length, c.y )
+    grid(x)(y)
+  }
+
+  /** Returns a grid filled randomly */
+  val randomGrid: Coord => Boolean = { coord: Coord =>
     val grid = List.fill(gridSize.x, gridSize.y) {
       Random.nextInt(5) == 0
     }
+    accessGrid( grid, coord )
+  }
 
-    def wrap(n: Int): Int =
-      (grid.length + n % -grid.length) % grid.length
-
-    def accessGrid( c: Coord ) =
-      grid( wrap(c.x) )( wrap(c.y) )
-
-    gameLoop( Store(accessGrid, Coord(0, 0)) )
+  /** Start here */
+  def main( args: Array[String] ): Unit = {
+    gameLoop( Store(randomGrid, Coord(0, 0)) )
   }
 
 }
