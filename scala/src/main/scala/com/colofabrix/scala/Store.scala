@@ -4,22 +4,17 @@ import cats._
 import cats.implicits._
 
 case class Store[S, A]( lookup: S => A, index: S ) {
-  def peek( s: S ): A =
-    lookup(index)
-
   def extract: A =
     lookup( index )
 
   def duplicate: Store[S, Store[S, A]] =
-    coflatMap(x => x)
+    Store( s => Store( lookup, s ), index )
 
-  def map[B]( f: A => B ): Store[S, B] = {
+  def map[B]( f: A => B ): Store[S, B] =
     Store( Store.memoize( lookup.andThen(f) ), index )
-  }
 
-  def coflatMap[B]( f: Store[S, A] => B ): Store[S, B] = {
-    Store( s => f( Store( lookup, s ) ), index )
-  }
+  def coflatMap[B]( f: Store[S, A] => B ): Store[S, B] =
+    duplicate.map( f )
 
   def experiment[F[_]: Functor]( f: S => F[S] ): F[A] = {
     f( index ).map( lookup )

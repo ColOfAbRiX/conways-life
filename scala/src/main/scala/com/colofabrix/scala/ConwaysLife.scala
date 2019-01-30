@@ -40,6 +40,24 @@ object ConwaysLife {
   /** Type of the field of the game */
   type Grid = Store[Coord, Boolean]
 
+  /** Prints the field */
+  def render( plane: Grid ): String = {
+    plane.experiment( _ => scan )
+      .map( cell => if( cell ) " x" else " ." )
+      .grouped( gridSize.x )
+      .map( _.mkString )
+      .mkString( "\n" )
+  }
+
+  /** Find the coordinates of all the grid */
+  val scan: List[Coord] =
+    for {
+      x <- (0 until gridSize.x).toList
+      y <- (0 until gridSize.y).toList
+    } yield {
+      Coord(x, y)
+    }
+
   /** Find the coordinates of the 8 neighbours on an infinite plane */
   def neighbours( c: Coord ): List[Coord] =
     for {
@@ -64,31 +82,16 @@ object ConwaysLife {
     }
   }
 
-  /** Prints the field */
-  def render( plane: Grid ): String = {
-    val coords: List[Coord] = for {
-      x <- (0 until gridSize.x).toList
-      y <- (0 until gridSize.y).toList
-    } yield {
-      Coord(x, y)
-    }
-
-    plane.experiment( _ => coords )
-      .map( cell => if( cell ) " x" else " ." )
-      .grouped( gridSize.x )
-      .map( _.mkString )
-      .mkString( "\n" )
-  }
-
   /** The main game loop */
   @tailrec
   def gameLoop( current: Grid ): Grid  = {
-    //println( "\033\143\n" )
+    println( "\033\143" )
     println( render(current) )
 
     Thread.sleep( 1000 )
-
-    gameLoop( current.coflatMap( conway ) )
+    gameLoop(
+      current.coflatMap( conway )
+    )
   }
 
   /** Start here */
@@ -96,10 +99,13 @@ object ConwaysLife {
     val grid = List.fill(gridSize.x, gridSize.y) {
       Random.nextInt(5) == 0
     }
-    def accessGrid( c: Coord ) = {
-      def wrap(n: Int) = (grid.length + n % -grid.length) % grid.length
+
+    def wrap(n: Int): Int =
+      (grid.length + n % -grid.length) % grid.length
+
+    def accessGrid( c: Coord ) =
       grid( wrap(c.x) )( wrap(c.y) )
-    }
+
     gameLoop( Store(accessGrid, Coord(0, 0)) )
   }
 
