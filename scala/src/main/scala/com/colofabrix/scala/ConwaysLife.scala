@@ -33,45 +33,47 @@ object ConwaysLife {
   /** Configuration */
   val gridSize = Coord( 10, 10 )
 
-  /** Coordinates in the field */
+  /** Coordinates in the grid */
   case class Coord( x: Int, y: Int )
 
-  /** Type of the field of the game */
+  /** Type of the grid of the game */
   type Grid = Store[Coord, Boolean]
 
-  /** Prints the field */
-  def render( plane: Grid ): String =
-    plane.experiment( _ => scan )
-      .map( cell => if( cell ) " x" else " ." )
-      .grouped( gridSize.x )
-      .map( _.mkString )
-      .mkString( "\n" )
-
-  /** Find the coordinates of all the grid */
-  val scan: List[Coord] =
-    for {
+  /** Prints the grid */
+  def render( plane: Grid ): String = {
+    // The coordinates corresponding to the whole grid
+    def wholeGrid: List[Coord] = for {
       x <- (0 until gridSize.x).toList
       y <- (0 until gridSize.y).toList
     } yield {
       Coord(x, y)
     }
 
-  /** Find the coordinates of the 8 neighbours on an infinite plane */
-  def neighbours( c: Coord ): List[Coord] =
-    for {
+    // Scan the grid, transform cells into charactes and group them
+    plane.experiment( _ => wholeGrid )
+      .map( cell => if( cell ) " x" else " ." )
+      .grouped( gridSize.x )
+      .map( _.mkString )
+      .mkString( "\n" )
+  }
+
+  /** Function to determine the state of a cell */
+  def conway( grid: Grid ): Boolean = {
+    // The coordinates corresponding to the neighbours of a cell
+    def neighbours( c: Coord ): List[Coord] = for {
       dx <- List(-1, 0, 1)
       dy <- List(-1, 0, 1) if dx != 0 || dy != 0
     } yield {
       Coord( c.x + dx, c.y + dy )
     }
 
-  /** Function to determine the state of a cell */
-  def conway( plane: Grid ): Boolean = {
-    val alive = plane
+    // Count the neighbours of the current cell
+    val alive = grid
       .experiment( neighbours )
       .count( identity )
 
-    plane.extract match {
+    // Perform the Conway's calculation for the next status
+    grid.extract match {
       case true if alive < 2 || alive > 3 => false
       case false if alive == 3 => true
       case x => x
@@ -81,34 +83,32 @@ object ConwaysLife {
   /** The main game loop */
   @tailrec
   def gameLoop( current: Grid ): Grid  = {
+    // Clean the screen and print
     println( "\033\143" )
     println( render(current) )
-
     Thread.sleep( 1000 )
+
+    // Apply the transformation to the whole grid and loop
     gameLoop(
       current.coflatMap( conway )
     )
   }
 
   /** Access an element in a grid wrapping around the edges */
-  def accessGrid( grid: List[List[Boolean]], c: Coord ): Boolean = {
-    def wrap(max: Int, n: Int) = (max + n % -max) % max
+  def accessGrid( grid: List[List[Boolean]] )( c: Coord ): Boolean = {
+    def wrap(m: Int, n: Int) = (m + n % -m) % m
     val x = wrap( grid.length, c.x )
-    val y = wrap( grid(x).length, c.y )
-    grid(x)(y)
+    grid( x )( wrap(grid(x).length, c.y) )
   }
 
   /** Returns a grid filled randomly */
-  val randomGrid: Coord => Boolean = { coord: Coord =>
-    val grid = List.fill(gridSize.x, gridSize.y) {
-      Random.nextInt(5) == 0
-    }
-    accessGrid( grid, coord )
+  val randomGrid: List[List[Boolean]] = List.fill(gridSize.x, gridSize.y) {
+    Random.nextInt(5) == 0
   }
 
   /** Start here */
-  def main( args: Array[String] ): Unit = {
-    gameLoop( Store(randomGrid, Coord(0, 0)) )
-  }
+  def main( args: Array[String] ): Unit = gameLoop(
+    Store( accessGrid(randomGrid), Coord(0, 0) )
+  )
 
 }

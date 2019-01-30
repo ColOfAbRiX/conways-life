@@ -4,7 +4,7 @@ import cats._
 import cats.implicits._
 
 case class Store[S, A]( lookup: S => A, index: S ) {
-  def extract: A =
+  lazy val extract: A =
     lookup( index )
 
   def duplicate: Store[S, Store[S, A]] =
@@ -25,6 +25,7 @@ object Store {
 
   import scala.collection.mutable
 
+  // The memoization here works by being a store of functions that store one
   def memoize[S, A]( f: S => A ): S => A = new mutable.HashMap[S, A]() {
     override def apply( index: S ): A = getOrElseUpdate( index, f(index) )
   }
