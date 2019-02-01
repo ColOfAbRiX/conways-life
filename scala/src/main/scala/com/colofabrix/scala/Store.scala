@@ -25,7 +25,10 @@ object Store {
 
   import scala.collection.mutable
 
-  // The memoization here works by being a store of functions that store one
+  // The memoization here works by 1) being a store of functions, 2) storing the
+  // result of a function with its argument as key in the HashMap and 3) by
+  // overriding the apply method so that it effectively becomes another S => A
+  // function for who calls it.
   def memoize[S, A]( f: S => A ): S => A = new mutable.HashMap[S, A]() {
     override def apply( index: S ): A = getOrElseUpdate( index, f(index) )
   }
