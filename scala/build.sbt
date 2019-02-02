@@ -15,3 +15,6 @@ libraryDependencies += "org.typelevel" %% "cats-core" % "1.5.0"
 // Kind Projector
 resolvers += Resolver.sonatypeRepo("releases")
 addCompilerPlugin("org.spire-math" %% "kind-projector" % "0.9.8")
+
+// Command line parser
+libraryDependencies += "com.github.scopt" %% "scopt" % "4.0.0-RC2"

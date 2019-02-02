@@ -30,35 +30,45 @@ import scala.util.Random
 
 object ConwaysLife {
 
-  /** Configuration */
-  val gridSize = Coord( 10, 10 )
-
   /** Coordinates in the grid */
   case class Coord( x: Int, y: Int )
 
   /** Type of the grid of the game */
   type Grid = Store[Coord, Boolean]
 
+  /** Configuration */
+  case class Config(
+    width: Int = 20,
+    height: Int = 20,
+    aliveSymbol: String = "#",
+    deadSymbol: String = ".",
+    delay: Double = 0.5,
+    filling: Int = 5,
+    fieldFile: Option[String] = None
+  )
+
   /** Prints the grid */
-  def render( plane: Grid ): String = {
+  def render( config: Config )( plane: Grid ): String = {
     // The coordinates corresponding to the whole grid
     def wholeGrid: List[Coord] = for {
-      x <- (0 until gridSize.x).toList
-      y <- (0 until gridSize.y).toList
+      x <- (0 until config.width).toList
+      y <- (0 until config.height).toList
     } yield {
       Coord(x, y)
     }
 
     // Scan the grid, transform cells into charactes and group them
+    val alive = " " + config.aliveSymbol
+    val dead = " " + config.deadSymbol
     plane.experiment( _ => wholeGrid )
-      .map( cell => if( cell ) " x" else " ." )
-      .grouped( gridSize.x )
+      .map( cell => if( cell ) alive else dead )
+      .grouped( config.width )
       .map( _.mkString )
       .mkString( "\n" )
   }
 
   /** Function to determine the state of a cell */
-  def conway( grid: Grid ): Boolean = {
+  def conway( config: Config )( grid: Grid ): Boolean = {
     // The coordinates corresponding to the neighbours of a cell
     def neighbours( c: Coord ): List[Coord] = for {
       dx <- List(-1, 0, 1)
@@ -82,16 +92,16 @@ object ConwaysLife {
 
   /** The main game loop */
   @tailrec
-  def gameLoop( current: Grid ): Grid  = {
+  def gameLoop( config: Config )( current: Grid ): Grid  = {
     // Clean the screen and print
-    println( "\033\143" )
-    println( render(current) )
-    Thread.sleep( 1000 )
+    //println( "\033\143" )
+    println( render( config )( current ) )
+    Thread.sleep( (config.delay * 1000).toLong )
+
+    System.exit(0)
 
     // Apply the transformation to the whole grid and loop
-    gameLoop(
-      current.coflatMap( conway )
-    )
+    gameLoop( config )( current.coflatMap( conway(config) ) )
   }
 
   /** Access an element in a grid wrapping around the edges */
@@ -102,13 +112,39 @@ object ConwaysLife {
   }
 
   /** Returns a grid filled randomly */
-  val randomGrid: List[List[Boolean]] = List.fill(gridSize.x, gridSize.y) {
-    Random.nextInt(5) == 0
-  }
+  def randomGrid( config: Config ): List[List[Boolean]] =
+    List.fill(config.width, config.height) {
+      Random.nextInt( config.filling ) == 0
+    }
 
   /** Start here */
-  def main( args: Array[String] ): Unit = gameLoop(
-    Store( accessGrid(randomGrid), Coord(0, 0) )
-  )
+  def main( args: Array[String] ): Unit = {
+    // Reading configuration from command line
+    val parser = new scopt.OptionParser[Config]("conway") {
+      head("Conway's Game of Life", "1.0.0")
+
+      opt[Int]("width")
+        .action((width, c) => c.copy(width = width))
+      opt[Int]("height")
+        .action((height, c) => c.copy(height = height))
+      opt[Double]("delay")
+        .action((delay, c) => c.copy(delay = delay))
+      opt[String]("alive-symbol")
+        .action((symbol, c) => c.copy(aliveSymbol = symbol))
+      opt[String]("dead-symbol")
+        .action((symbol, c) => c.copy(deadSymbol = symbol))
+      opt[Double]("filling")
+        .action((filling, c) => c.copy(
+          filling = Math.max(Math.ceil(1.0 / filling).toInt - 1, 0))
+        )
+    }
+
+    parser.parse(args, Config()) match {
+      case None =>
+      case Some( config ) =>
+        val accessor = accessGrid( randomGrid(config) )( _ )
+        gameLoop( config )( Store( accessor, Coord(0, 0) ) )
+    }
+  }
 
 }
