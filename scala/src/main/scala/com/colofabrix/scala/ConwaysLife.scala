@@ -15,7 +15,7 @@ copies or substantial portions of the Software.
 
 THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
 IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
-FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+FITNESS FOR A PARTICULAR PURPOSE AND NON INFRINGEMENT. IN NO EVENT SHALL THE
 AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
 LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
 OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
@@ -30,13 +30,9 @@ import scala.util.Random
 
 object ConwaysLife {
 
-  /** Coordinates in the grid */
-  case class Coord( x: Int, y: Int )
-
-  /** Type of the grid of the game */
-  type Grid = Store[Coord, Boolean]
-
-  /** Configuration */
+  /**
+    * Configuration
+    */
   case class Config(
     width: Int = 20,
     height: Int = 20,
@@ -47,7 +43,105 @@ object ConwaysLife {
     fieldFile: Option[String] = None
   )
 
-  /** Prints the grid */
+  /**
+    * Coordinates in the grid
+    */
+  case class Coord( x: Int, y: Int )
+
+  /**
+    * Type of the grid of the game
+    */
+  type Grid = Store[Coord, Boolean]
+
+  /**
+    * Options parser for scopt
+    */
+  private val parser = new scopt.OptionParser[Config]("conway") {
+    import math._
+
+    head("Conway's Game of Life", "1.0.0")
+
+    // Width of the field
+    opt[Int]('w', "width")
+      .action( (w, c) => c.copy(width = w) )
+      .text( "Width of the field" )
+
+    // Height of the field
+    opt[Int]('h', "height")
+      .action( (h, c) => c.copy(height = h) )
+      .text( "Height of the field" )
+
+    // Delay in ms between generations
+    opt[Double]('d', "delay")
+      .action( (d, c) => c.copy(delay = d) )
+      .text( "Delay in ms between generations" )
+
+    // The symbol to display for an alive cell
+    opt[String]("alive-symbol")
+      .action( (s, c) => c.copy(aliveSymbol = s) )
+      .text( "The symbol to display for an alive cell" )
+
+    // The symbol to display for a dead cell
+    opt[String]("dead-symbol")
+      .action( (s, c) => c.copy(deadSymbol = s) )
+      .text( "The symbol to display for a dead cell" )
+
+    // Percentage of alive cell when filling the field randomly
+    opt[Double]("filling")
+      .action( (f, c) => c.copy( filling = max(ceil(1.0 / f).toInt - 1, 0)) )
+      .text( "Percentage of alive cell when filling the field randomly" )
+  }
+
+  /**
+    * Start here
+    */
+  def main( args: Array[String] ): Unit = {
+    parser.parse(args, Config()) match {
+      case None =>
+      case Some( config ) =>
+        val accessor = accessGrid( randomGrid(config) )( _ )
+        gameLoop( config )( Store( accessor, Coord(0, 0) ) )
+    }
+  }
+
+  /**
+    * Access an element in a grid wrapping around the edges
+    */
+  def accessGrid( grid: List[List[Boolean]] )( c: Coord ): Boolean = {
+    def wrap(m: Int, n: Int) = (m + n % -m) % m
+    val x = wrap( grid.length, c.x )
+    grid( x )( wrap(grid(x).length, c.y) )
+  }
+
+  /**
+    * Returns a grid filled randomly
+    */
+  def randomGrid( config: Config ): List[List[Boolean]] = {
+    List.fill( config.width, config.height ) {
+      Random.nextInt( config.filling ) == 0
+    }
+  }
+
+  /**
+    * The main game loop
+    */
+  @tailrec
+  def gameLoop( config: Config )( current: Grid ): Grid  = {
+    // Clean the screen and print
+    //println( "\033\143" )
+    println( render( config )( current ) )
+    Thread.sleep( (config.delay * 1000).toLong )
+
+    // NOTE: Just for debugging
+    System.exit(0)
+
+    // Apply the transformation to the whole grid and loop
+    gameLoop( config )( current.coflatMap( conway(config) ) )
+  }
+
+  /**
+    * Prints the grid
+    */
   def render( config: Config )( plane: Grid ): String = {
     // The coordinates corresponding to the whole grid
     def wholeGrid: List[Coord] = for {
@@ -57,7 +151,7 @@ object ConwaysLife {
       Coord(x, y)
     }
 
-    // Scan the grid, transform cells into charactes and group them
+    // Scan the grid, transform cells into characters and group them
     val alive = " " + config.aliveSymbol
     val dead = " " + config.deadSymbol
     plane.experiment( _ => wholeGrid )
@@ -67,7 +161,9 @@ object ConwaysLife {
       .mkString( "\n" )
   }
 
-  /** Function to determine the state of a cell */
+  /**
+    * Function to determine the state of a cell
+    */
   def conway( config: Config )( grid: Grid ): Boolean = {
     // The coordinates corresponding to the neighbours of a cell
     def neighbours( c: Coord ): List[Coord] = for {
@@ -89,62 +185,4 @@ object ConwaysLife {
       case x => x
     }
   }
-
-  /** The main game loop */
-  @tailrec
-  def gameLoop( config: Config )( current: Grid ): Grid  = {
-    // Clean the screen and print
-    //println( "\033\143" )
-    println( render( config )( current ) )
-    Thread.sleep( (config.delay * 1000).toLong )
-
-    System.exit(0)
-
-    // Apply the transformation to the whole grid and loop
-    gameLoop( config )( current.coflatMap( conway(config) ) )
-  }
-
-  /** Access an element in a grid wrapping around the edges */
-  def accessGrid( grid: List[List[Boolean]] )( c: Coord ): Boolean = {
-    def wrap(m: Int, n: Int) = (m + n % -m) % m
-    val x = wrap( grid.length, c.x )
-    grid( x )( wrap(grid(x).length, c.y) )
-  }
-
-  /** Returns a grid filled randomly */
-  def randomGrid( config: Config ): List[List[Boolean]] =
-    List.fill(config.width, config.height) {
-      Random.nextInt( config.filling ) == 0
-    }
-
-  /** Start here */
-  def main( args: Array[String] ): Unit = {
-    // Reading configuration from command line
-    val parser = new scopt.OptionParser[Config]("conway") {
-      head("Conway's Game of Life", "1.0.0")
-
-      opt[Int]("width")
-        .action((width, c) => c.copy(width = width))
-      opt[Int]("height")
-        .action((height, c) => c.copy(height = height))
-      opt[Double]("delay")
-        .action((delay, c) => c.copy(delay = delay))
-      opt[String]("alive-symbol")
-        .action((symbol, c) => c.copy(aliveSymbol = symbol))
-      opt[String]("dead-symbol")
-        .action((symbol, c) => c.copy(deadSymbol = symbol))
-      opt[Double]("filling")
-        .action((filling, c) => c.copy(
-          filling = Math.max(Math.ceil(1.0 / filling).toInt - 1, 0))
-        )
-    }
-
-    parser.parse(args, Config()) match {
-      case None =>
-      case Some( config ) =>
-        val accessor = accessGrid( randomGrid(config) )( _ )
-        gameLoop( config )( Store( accessor, Coord(0, 0) ) )
-    }
-  }
-
 }
