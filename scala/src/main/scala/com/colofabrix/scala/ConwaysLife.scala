@@ -24,9 +24,14 @@ SOFTWARE.
 
 package com.colofabrix.scala
 
+import java.io.File
+
 import cats.implicits._
+import cats.data.Reader
+
 import scala.annotation.tailrec
 import scala.util.Random
+
 
 object ConwaysLife {
 
@@ -40,7 +45,7 @@ object ConwaysLife {
     deadSymbol: String = ".",
     delay: Double = 0.5,
     filling: Int = 5,
-    fieldFile: Option[String] = None
+    loadFile: Option[File] = None
   )
 
   /**
@@ -52,6 +57,7 @@ object ConwaysLife {
     * Type of the grid of the game
     */
   type Grid = Store[Coord, Boolean]
+  type MaterialGrid = List[List[Boolean]]
 
   /**
     * Options parser for scopt
@@ -90,6 +96,12 @@ object ConwaysLife {
     opt[Double]("filling")
       .action( (f, c) => c.copy( filling = max(ceil(1.0 / f).toInt - 1, 0)) )
       .text( "Percentage of alive cell when filling the field randomly" )
+
+    // Optional field file to load at startup
+    arg[File]("<field>")
+      .action( (f, c) => c.copy(loadFile = Some(f)) )
+      .text("Optional field file to load at startup")
+      .optional()
   }
 
   /**
@@ -99,7 +111,14 @@ object ConwaysLife {
     parser.parse(args, Config()) match {
       case None =>
       case Some( config ) =>
-        val accessor = accessGrid( randomGrid(config) )( _ )
+        // Create a grid from either a file or randomly
+        val grid = config.loadFile match {
+          case None => randomGrid
+          case Some(_) => fileGrid
+        }
+
+        // Define how to access the grid and start
+        val accessor = accessGrid( grid.run(config) )( _ )
         gameLoop( config )( Store( accessor, Coord(0, 0) ) )
     }
   }
@@ -107,7 +126,7 @@ object ConwaysLife {
   /**
     * Access an element in a grid wrapping around the edges
     */
-  def accessGrid( grid: List[List[Boolean]] )( c: Coord ): Boolean = {
+  def accessGrid( grid: MaterialGrid )( c: Coord ): Boolean = {
     def wrap(m: Int, n: Int) = (m + n % -m) % m
     val x = wrap( grid.length, c.x )
     grid( x )( wrap(grid(x).length, c.y) )
@@ -115,10 +134,16 @@ object ConwaysLife {
 
   /**
     * Returns a grid filled randomly
+    * TODO: Implement it for real
     */
-  def randomGrid( config: Config ): List[List[Boolean]] = {
-    List.fill( config.width, config.height ) {
-      Random.nextInt( config.filling ) == 0
+  def fileGrid: Reader[Config, MaterialGrid] = randomGrid
+
+  /**
+    * Returns a grid loaded from a file
+    */
+  def randomGrid: Reader[Config, MaterialGrid] = Reader { c: Config =>
+    List.fill( c.width, c.height ) {
+      Random.nextInt( c.filling ) == 0
     }
   }
 
@@ -128,12 +153,9 @@ object ConwaysLife {
   @tailrec
   def gameLoop( config: Config )( current: Grid ): Grid  = {
     // Clean the screen and print
-    //println( "\033\143" )
+    println( "\033\143" )
     println( render( config )( current ) )
     Thread.sleep( (config.delay * 1000).toLong )
-
-    // NOTE: Just for debugging
-    System.exit(0)
 
     // Apply the transformation to the whole grid and loop
     gameLoop( config )( current.coflatMap( conway(config) ) )
