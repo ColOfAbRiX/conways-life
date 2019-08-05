@@ -22,6 +22,10 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
 */
 
+// TODO: Load grid from a file
+// TODO: Find a slim way of passing the configuration around
+// TODO: Use the cats representable Store comonad instead of a custom one
+
 package com.colofabrix.scala
 
 import java.io.File
@@ -49,6 +53,52 @@ object ConwaysLife {
   )
 
   /**
+    * Options parser for scopt
+    */
+  private val parser = new scopt.OptionParser[Config]("conway") {
+    import math._
+
+    head("Conway's Game of Life", "1.0.1")
+
+    // Width of the field
+    opt[Int]('w', "width")
+      .action( (w, c) => c.copy(width = w) )
+      .text( s"Width of the field. Default: ${Config().width}" )
+
+    // Height of the field
+    opt[Int]('h', "height")
+      .action( (h, c) => c.copy(height = h) )
+      .text( s"Height of the field. Default: ${Config().height}" )
+
+    // Delay in ms between generations
+    opt[Double]('d', "delay")
+      .action( (d, c) => c.copy(delay = d) )
+      .text( s"Delay in ms between generations. Default: ${Config().delay}" )
+
+    // The symbol to display for an alive cell
+    opt[String]("alive-symbol")
+      .action( (s, c) => c.copy(aliveSymbol = s) )
+      .text( s"The symbol to display for an alive cell. Default: ${Config().aliveSymbol}" )
+
+    // The symbol to display for a dead cell
+    opt[String]("dead-symbol")
+      .action( (s, c) => c.copy(deadSymbol = s) )
+      .text( s"The symbol to display for a dead cell. Default: ${Config().deadSymbol}" )
+
+    // Percentage of alive cell when filling the field randomly
+    opt[Double]("filling")
+      .action( (f, c) => c.copy( filling = max(ceil(1.0 / f).toInt - 1, 0)) )
+      .text( s"Percentage of alive cell when filling the field randomly" )
+
+    // Optional field file to load at startup
+    arg[File]("<field>")
+      .action( (f, c) => c.copy(loadFile = Some(f)) )
+      .text( s"Optional field file to load at startup. Default: ${Config().loadFile}" )
+      .optional()
+  }
+
+
+  /**
     * Coordinates in the grid
     */
   case class Coord( x: Int, y: Int )
@@ -60,51 +110,6 @@ object ConwaysLife {
   type MaterialGrid = List[List[Boolean]]
 
   /**
-    * Options parser for scopt
-    */
-  private val parser = new scopt.OptionParser[Config]("conway") {
-    import math._
-
-    head("Conway's Game of Life", "1.0.0")
-
-    // Width of the field
-    opt[Int]('w', "width")
-      .action( (w, c) => c.copy(width = w) )
-      .text( "Width of the field" )
-
-    // Height of the field
-    opt[Int]('h', "height")
-      .action( (h, c) => c.copy(height = h) )
-      .text( "Height of the field" )
-
-    // Delay in ms between generations
-    opt[Double]('d', "delay")
-      .action( (d, c) => c.copy(delay = d) )
-      .text( "Delay in ms between generations" )
-
-    // The symbol to display for an alive cell
-    opt[String]("alive-symbol")
-      .action( (s, c) => c.copy(aliveSymbol = s) )
-      .text( "The symbol to display for an alive cell" )
-
-    // The symbol to display for a dead cell
-    opt[String]("dead-symbol")
-      .action( (s, c) => c.copy(deadSymbol = s) )
-      .text( "The symbol to display for a dead cell" )
-
-    // Percentage of alive cell when filling the field randomly
-    opt[Double]("filling")
-      .action( (f, c) => c.copy( filling = max(ceil(1.0 / f).toInt - 1, 0)) )
-      .text( "Percentage of alive cell when filling the field randomly" )
-
-    // Optional field file to load at startup
-    arg[File]("<field>")
-      .action( (f, c) => c.copy(loadFile = Some(f)) )
-      .text("Optional field file to load at startup")
-      .optional()
-  }
-
-  /**
     * Start here
     */
   def main( args: Array[String] ): Unit = {
@@ -112,19 +117,23 @@ object ConwaysLife {
       case None =>
       case Some( config ) =>
         // Create a grid from either a file or randomly
-        val grid = config.loadFile match {
+        val materialGrid = config.loadFile match {
           case None => randomGrid
           case Some(_) => fileGrid
         }
 
-        // Define how to access the grid and start
-        val accessor = accessGrid( grid.run(config) )( _ )
-        gameLoop( config )( Store( accessor, Coord(0, 0) ) )
+        // Define an accessor to the grid, "how to access the grid"
+        val accessor = accessGrid( materialGrid.run(config) )( _ )
+
+        // Start at coord 0, 0 and... Go!
+        val gridStore = Store( accessor, Coord(0, 0) )
+        gameLoop( gridStore )( config )
     }
   }
 
   /**
     * Access an element in a grid wrapping around the edges
+    * NOTE: the wrapping is a change in original game of life that has an infinite grid
     */
   def accessGrid( grid: MaterialGrid )( c: Coord ): Boolean = {
     def wrap(m: Int, n: Int) = (m + n % -m) % m
@@ -133,13 +142,12 @@ object ConwaysLife {
   }
 
   /**
-    * Returns a grid filled randomly
-    * TODO: Implement it for real
+    * Returns a grid loaded from a file
     */
   def fileGrid: Reader[Config, MaterialGrid] = randomGrid
 
   /**
-    * Returns a grid loaded from a file
+    * Returns a grid filled randomly
     */
   def randomGrid: Reader[Config, MaterialGrid] = Reader { c: Config =>
     List.fill( c.width, c.height ) {
@@ -151,20 +159,20 @@ object ConwaysLife {
     * The main game loop
     */
   @tailrec
-  def gameLoop( config: Config )( current: Grid ): Grid  = {
+  def gameLoop( current: Grid )( implicit config: Config ): Grid  = {
     // Clean the screen and print
     println( "\033\143" )
-    println( render( config )( current ) )
+    println( render( current ) )
     Thread.sleep( (config.delay * 1000).toLong )
 
     // Apply the transformation to the whole grid and loop
-    gameLoop( config )( current.coflatMap( conway(config) ) )
+    gameLoop( current.coflatMap( conway ) )
   }
 
   /**
     * Prints the grid
     */
-  def render( config: Config )( plane: Grid ): String = {
+  def render( plane: Grid )( implicit config: Config ): String = {
     // The coordinates corresponding to the whole grid
     def wholeGrid: List[Coord] = for {
       x <- (0 until config.width).toList
@@ -185,8 +193,10 @@ object ConwaysLife {
 
   /**
     * Function to determine the state of a cell
+    * This is a local function that works on a Store focused on the current
+    * element and its neighbours
     */
-  def conway( config: Config )( grid: Grid ): Boolean = {
+  def conway( grid: Grid )( implicit config: Config ): Boolean = {
     // The coordinates corresponding to the neighbours of a cell
     def neighbours( c: Coord ): List[Coord] = for {
       dx <- List(-1, 0, 1)
@@ -202,9 +212,9 @@ object ConwaysLife {
 
     // Perform the Conway's calculation for the next status
     grid.extract match {
-      case true if alive < 2 || alive > 3 => false
-      case false if alive == 3 => true
-      case x => x
+      case true  if alive < 2 || alive > 3 => false
+      case false if alive == 3             => true
+      case x                               => x
     }
   }
 }
