@@ -2,7 +2,7 @@ name := "conways-life"
 
 description := "Conway's Game of Life"
 
-version := "1.0"
+version := "1.0.2"
 
 scalaVersion := "2.12.8"
 

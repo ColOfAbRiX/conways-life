@@ -22,8 +22,6 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
 */
 
-// TODO: Load grid from a file
-// TODO: Find a slim way of passing the configuration around
 // TODO: Use the cats representable Store comonad instead of a custom one
 
 package com.colofabrix.scala
@@ -31,7 +29,6 @@ package com.colofabrix.scala
 import java.io.File
 
 import cats.implicits._
-import cats.data.Reader
 
 import scala.annotation.tailrec
 import scala.util.Random
@@ -58,7 +55,10 @@ object ConwaysLife {
   private val parser = new scopt.OptionParser[Config]("conway") {
     import math._
 
-    head("Conway's Game of Life", "1.0.1")
+    head("Conway's Game of Life", "1.0.2")
+
+    help("help")
+      .text( "{p}rints this usage text" )
 
     // Width of the field
     opt[Int]('w', "width")
@@ -109,33 +109,37 @@ object ConwaysLife {
   type Grid = Store[Coord, Boolean]
   type MaterialGrid = List[List[Boolean]]
 
+
   /**
     * Start here
     */
   def main( args: Array[String] ): Unit = {
-    parser.parse(args, Config()) match {
-      case None =>
+    parser.parse( args, Config() ) match {
+      case None           =>  // Managed by scopt
       case Some( config ) =>
+        implicit val implicitConfig = config
+
         // Create a grid from either a file or randomly
         val materialGrid = config.loadFile match {
-          case None => randomGrid
-          case Some(_) => fileGrid
+          case None    => randomGrid
+          case Some(_) => gridFromFile
         }
 
         // Define an accessor to the grid, "how to access the grid"
-        val accessor = accessGrid( materialGrid.run(config) )( _ )
+        val accessor = getGridAccessor( materialGrid )
 
         // Start at coord 0, 0 and... Go!
         val gridStore = Store( accessor, Coord(0, 0) )
-        gameLoop( gridStore )( config )
+        gameLoop( gridStore )
     }
   }
 
   /**
     * Access an element in a grid wrapping around the edges
-    * NOTE: the wrapping is a change in original game of life that has an infinite grid
+    * NOTE: the wrapping is a change in original game of life which has an
+    * infinite grid
     */
-  def accessGrid( grid: MaterialGrid )( c: Coord ): Boolean = {
+  def getGridAccessor( grid: MaterialGrid ): Coord => Boolean = { c =>
     def wrap(m: Int, n: Int) = (m + n % -m) % m
     val x = wrap( grid.length, c.x )
     grid( x )( wrap(grid(x).length, c.y) )
@@ -144,14 +148,24 @@ object ConwaysLife {
   /**
     * Returns a grid loaded from a file
     */
-  def fileGrid: Reader[Config, MaterialGrid] = randomGrid
+  def gridFromFile( implicit config: Config ): MaterialGrid = {
+    io.Source.fromFile(config.loadFile.get)
+      .getLines()
+      .map { line =>
+        line.replaceAll("""\s+""", "")
+          .split("")
+          .toList.map { symbol =>
+            symbol == config.aliveSymbol
+          }
+      }.toList
+  }
 
   /**
     * Returns a grid filled randomly
     */
-  def randomGrid: Reader[Config, MaterialGrid] = Reader { c: Config =>
-    List.fill( c.width, c.height ) {
-      Random.nextInt( c.filling ) == 0
+  def randomGrid( implicit config: Config ): MaterialGrid = {
+    List.fill( config.width, config.height ) {
+      Random.nextInt( config.filling ) == 0
     }
   }
 
@@ -162,15 +176,15 @@ object ConwaysLife {
   def gameLoop( current: Grid )( implicit config: Config ): Grid  = {
     // Clean the screen and print
     println( "\033\143" )
-    println( render( current ) )
+    println( render(current) )
     Thread.sleep( (config.delay * 1000).toLong )
 
     // Apply the transformation to the whole grid and loop
-    gameLoop( current.coflatMap( conway ) )
+    gameLoop( current.coflatMap(conway) )
   }
 
   /**
-    * Prints the grid
+    * Renders and prints the grid
     */
   def render( plane: Grid )( implicit config: Config ): String = {
     // The coordinates corresponding to the whole grid
@@ -193,8 +207,9 @@ object ConwaysLife {
 
   /**
     * Function to determine the state of a cell
-    * This is a local function that works on a Store focused on the current
-    * element and its neighbours
+    *
+    * This is the core of the comonadic job, it's a local function that works
+    * on a Store focused on the current element and its neighbours
     */
   def conway( grid: Grid )( implicit config: Config ): Boolean = {
     // The coordinates corresponding to the neighbours of a cell
